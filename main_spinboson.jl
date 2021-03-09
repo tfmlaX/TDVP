@@ -66,6 +66,7 @@ obs = [
 Parameters to be stored:
 """
 pars = [
+    ["ωc",ωc],
     ["ω0",ω0],
     ["beta",beta],
     ["α",α],
