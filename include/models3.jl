@@ -18,12 +18,16 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
     anihsite(x) = anih(2)
     projsite(x) = [0 0;0 1]
 
-    a_chain = chainparams[1]./ωc
-    b_chain = (chainparams[2]./ωc).^2
+    matlabdir = "./"
+    datfname = "chaincoeffs_ohmic_a$(α)wc$(ωc)xc$(ωc/c_phonon)beta$(beta).csv"
+    chaincoeffs = readdlm(string(matlabdir,datfname),',',Float64,'\n',skipstart=1)
+
+    a_chain = chaincoeffs[:,1]
+    b_chain = chaincoeffs[:,2]
 
     Norm = []
      
-    function polybeta_bis(t::Float64, n::Int, a::Array, b::Array, temp::Array)
+    function polybeta(t::Float64, n::Int, a::Array, b::Array, temp::Array)
     """
     polybeta recursively constructs the polynomials used to compute the coupling coefficients given the coefficients a and b
     this function is useful when working at finite temperature (beta != inf)	
@@ -50,13 +54,13 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
               return pn
           else
               if length(temp)<n+1 && temp[1] == t
-                  pn = (t - a[n])*polybeta_bis(t,n-1,a,b,temp) - b[n-1]*polybeta_bis(t,n-2,a,b,temp) #P_{n}(t) = (t-a_{n-1})P_{n-1} - b_{n-1}P_{n-2}
+                  pn = (t - a[n])*polybeta(t,n-1,a,b,temp) - b[n-1]*polybeta(t,n-2,a,b,temp) #P_{n}(t) = (t-a_{n-1})P_{n-1} - b_{n-1}P_{n-2}
                   push!(temp, pn)
                   
                   return pn
               elseif length(temp)<n+1 && temp[1] != t
                   temp = [t]
-                  pn = (t - a[n])*polybeta_bis(t,n-1,a,b,temp) - b[n-1]*polybeta_bis(t,n-2,a,b,temp) #P_{n}(t) = (t-a_{n-1})P_{n-1} - b_{n-1}P_{n-2}
+                  pn = (t - a[n])*polybeta(t,n-1,a,b,temp) - b[n-1]*polybeta(t,n-2,a,b,temp) #P_{n}(t) = (t-a_{n-1})P_{n-1} - b_{n-1}P_{n-2}
                   push!(temp, pn)
                   
                   return pn
@@ -67,7 +71,7 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
                    return pn
                elseif length(temp) == n+1 && temp[1] != t
                    temp = [t]
-                   pn = (t - a[n])*polybeta_bis(t,n-1,a,b,temp) - b[n-1]*polybeta_bis(t,n-2,a,b,temp) #P_{n}(t) = (t-a_{n-1})P_{n-1} - b_{n-1}P_{n-2}
+                   pn = (t - a[n])*polybeta(t,n-1,a,b,temp) - b[n-1]*polybeta(t,n-2,a,b,temp) #P_{n}(t) = (t-a_{n-1})P_{n-1} - b_{n-1}P_{n-2}
                    push!(temp, pn)
                    
                    return pn
@@ -77,7 +81,7 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
                    return pn
                else
                    temp = [t]
-                   pn = (t - a[n])*polybeta_bis(t,n-1,a,b,temp) - b[n-1]*polybeta_bis(t,n-2,a,b,temp) #P_{n}(t) = (t-a_{n-1})P_{n-1} - b_{n-1}P_{n-2}
+                   pn = (t - a[n])*polybeta(t,n-1,a,b,temp) - b[n-1]*polybeta(t,n-2,a,b,temp) #P_{n}(t) = (t-a_{n-1})P_{n-1} - b_{n-1}P_{n-2}
                    push!(temp, pn)
                    
                    return pn
@@ -94,7 +98,8 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
                 return sqrt(2*α*gamma(s + 1))*ωc*quadgk(polynomial0, 0, 1)[1]
             else
                 polynomial(t) = 2*jacobi(2*t-1,n-1, 0, s)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s
-                return sqrt(2*α*(2*(n-1) + s + 1))*ωc*quadgk(polynomial, 0, 1)[1]
+		return sqrt(2*α*(2*(n-1) + s + 1))*ωc*quadgk(polynomial, 0, 1)[1]
+
                 # """ 2 discrete modes case """
                 # g1 = 1.
                 # g2 = 1.
@@ -106,10 +111,10 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
                 #     return (g1*g2)*(exp(-im*w1*(x-1)) - exp(-im*w2*(x-1)))/sqrt(g1^2+g2^2)
                 # end
             end
-        else
-            p(t) = polybeta_bis(t,n-1,a_chain,b_chain,[t])
-            integrand(t) = p(t)*exp(im*t*(x-1)*R*ωc/c_phonon)*SDTOhmic(t)
-            N2(t) = p(t)^2*SDTOhmic(t)
+        elseif beta!="inf"
+            polynomial(t) = polybeta(t,n-1,a_chain,b_chain,[t])
+            integrand(t) = polynomial(t)*exp(im*t*(x-1)*R*ωc/c_phonon)*SDTOhmic(t)
+            N2(t) = polynomial(t)^2*SDTOhmic(t)
             if length(Norm)<n
                 push!(Norm,sqrt(quadgk(N2,-1,1)[1]))
             end
@@ -118,14 +123,27 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
         end
     end
 
+    # Bath Ohmic Spectral Density for zero temperature chain mapping of the bath
+    function SDOhmic(t)
+        if t==0
+            return 0
+        elseif t>-1 && t<1
+            return 2*α*abs(t)*ωc
+        elseif abs(t)==1
+            return 2*α*ωc
+        else
+            return 0
+        end
+    end
+
     # Bath Ohmic Spectral Density after the finite temperature chain mapping of the bath
     function SDTOhmic(t)
         if t==0
-            return 2*α/beta
+            return 4*α/beta
         elseif t>-1 && t<1
-            return α*t*(1+coth(beta*t*0.5))*exp(-abs(t))
+            return 2*α*t*ωc*(1+coth(beta*t*ωc*0.5))
         elseif abs(t)==1
-            return α*t*(1+coth(beta*t*0.5))*exp(-abs(t))
+            return 2*α*t*ωc*(1+coth(beta*t*ωc*0.5))
         else
             return 0
         end
@@ -259,6 +277,69 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
             push!(W, M)
         end
 
+	print("Last Mode of the First Chain \n")
+        D = 2*(N + 2)
+        M = zeros(ComplexF64,D, D, d, d)
+        M[1,1,:,:] = M[D,D,:,:] = u
+        M[1,D,:,:] = e[Nm]*n
+        i = 2
+        M[i,D,:,:] = b
+        M[i+1,D,:,:] = bd
+        i += 2
+
+        a = 0 #site counter
+        while i<D
+            a+=1
+            couplingcoeff = γ(a, Nm, issoft,beta=beta)
+            M[i,D,:,:] = couplingcoeff*b
+            if i<D-1
+                M[i,i,:,:] = u
+            end
+            i+=1
+            M[i,D,:,:] = conj(couplingcoeff)*bd
+            if i<D
+                M[i,i,:,:] = u
+            end
+            i+=1
+        end
+
+            M = reshape(M,D,D,d,d)
+            push!(W, M)
+
+	print("Second chain \n")
+	for m = 1:Nm-1
+            print("Chain mode ",m,"\n")
+            D = 2*(N + 2)
+            M = zeros(ComplexF64,D, D, d, d)
+            M[1,1,:,:] = M[D,D,:,:] = u
+            M[1,D,:,:] = e[m]*n
+            i = 2
+            M[1,i,:,:] = t[m]*bd
+            M[1,i+1,:,:] = t[m]*b
+            M[i,D,:,:] = b
+            M[i+1,D,:,:] = bd
+            i += 2
+
+            a = 0 #site counter
+            while i<D
+                a+=1
+                couplingcoeff = γ(a, m, issoft,beta=beta)
+                M[i,D,:,:] = couplingcoeff*bd
+                if i<D-1
+                    M[i,i,:,:] = u
+                end
+                i+=1
+                M[i,D,:,:] = conj(couplingcoeff)*b
+                if i<D
+                    M[i,i,:,:] = u
+                end
+                i+=1
+            end
+
+            M = reshape(M,D,D,d,d)
+            push!(W, M)
+        end
+
         print("Last mode \n")
         WNm = zeros(ComplexF64,D, 1, d, d)
         WNm[1,1,:,:] = e[Nm]*n
@@ -269,9 +350,9 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
         while i<D
             a+=1
             couplingcoeff = γ(a,Nm, issoft, beta=beta)
-            WNm[i,1,:,:] = couplingcoeff*b
+            WNm[i,1,:,:] = couplingcoeff*bd
             i+=1
-            WNm[i,1,:,:] = conj(couplingcoeff)*bd
+            WNm[i,1,:,:] = conj(couplingcoeff)*b
             i+=1
         end
         WNm[D,1,:,:] = u
@@ -303,7 +384,7 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
         mpocompression!(R)
         return R
     else
-        return Any[W1[1:1,:,:,:], W[2:(N+Nm-1)]..., WNm]
+        return Any[W1[1:1,:,:,:], W[2:(N+2*Nm-1)]..., WNm]
     end
 end
 
@@ -333,10 +414,14 @@ function chaincoeffs_ohmic(nummodes, α, s, beta="inf"; ωc=1, soft=false)
             t = [ωc*sqrt((n + 1)*(n + s + 1)) for n in 0:(nummodes-2)]
             return e, t, c0
         else
+	    # For frequency modes, the polynomials are Jacobi polynomials
             c0 = sqrt(2α/(s+1))*ωc
             e = [(ωc/2)*(1 + (s^2)/((s+2n)*(2+s+2n))) for n in 0:(nummodes-1)]
             t = [ωc*(1+n)*(1+s+n)/((s+2+2n)*(s+3+2n))*sqrt((3+s+2n)/(1+s+2n)) for n in 0:(nummodes-2)]
             return e, t, c0
+
+	    # For wave-vector modes, we have to construct the polynomials
+	    #return getchaincoeffs(nummodes, α, s, beta, ωc)
         end
     else
         if soft
@@ -349,9 +434,9 @@ end
 
 function getchaincoeffs(nummodes, α, s, beta, ωc=1)
     matlabdir = "./"
-    astr = paramstring(α, 2)
-    bstr = paramstring(beta, 3)
-    datfname = "chaincoeffs_ohmic_a$(α)wc$(ωc)xc$(ωc)beta$(beta).csv"
+    #astr = paramstring(α, 2)
+    #bstr = paramstring(beta, 3)
+    datfname = "chaincoeffs_ohmic_a$(α)wc$(ωc)xc$(ωc/c)beta$(beta).csv"
     chaincoeffs = readdlm(string(matlabdir,datfname),',',Float64,'\n',skipstart=1)
     es = ωc .* chaincoeffs[1:end,1]
     ts = ωc .* chaincoeffs[1:end-1,2]

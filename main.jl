@@ -5,23 +5,23 @@ using Jacobi
 fdir = "./"
 
 dt=0.25 # time step
-tmax=30 # simulation time
+tmax=60 # simulation time
 
 """
 Physical parameters:
 """
-ωc = 2 # Bath Spectral density cut-off frequency
+ωc = 1 # Bath Spectral density cut-off frequency
 ω0 = .25 # Sites coupling energy
-α = 0.01 # Bath Spectral density coupling strength
+α = 0.03 # Bath Spectral density coupling strength
 s = 1 # Ohmic spectral density
-beta = 0.5 # Bath inverse temperature
+beta = "inf" # Bath inverse temperature
 
-R = 1 # Sites separation
-c = ω0/pi # Phonon speed
+R = 20 # Sites separation
+c = 2 # Phonon speed
 
 N = 2 # number of sites
 
-Nm = 170 # number of chainmodes
+Nm = 35 # number of chainmodes
 
 issoft=false # is the cut-off of the spectral density a soft one or a hard one?
 
@@ -41,7 +41,7 @@ cp = chaincoeffs_ohmic(Nm, α, s, beta, ωc=ωc, soft=issoft) # chain parameters
 MPS and MPO parameters
 """
 Chimax = 20 #Max bond dimension
-dhilbert = 30 #Hilbert Space dimension of the chain sites
+dhilbert = 20 #Hilbert Space dimension of the chain sites
 
 """
 Define the MPO:
@@ -51,7 +51,7 @@ H(Dmax,d) = thibautmpo(N, Nm, d, J=ω0, chainparams=cp, s=s, α=α, ωc=ωc, R=R
 Define the MPS:
 """
 ## Single excitation state ##
-statelist = [unitcol(1,dhilbert) for i in 1:Nm] # all the chain modes are in vaccuum state
+statelist = [unitcol(1,dhilbert) for i in 1:2*Nm] # all the chain modes are in vaccuum state
 for i in 2:N-1 # no excitation on the sites 3 to N
     pushfirst!(statelist,unitcol(1, 2))
 end
@@ -83,7 +83,7 @@ obs = [
     ["n2", (psi, args...) -> real(measure1siteoperator(psi, numb(2), 2)) ],
     #["n3", (psi, args...) -> real(measure1siteoperator(psi, numb(2), 3)) ],
     ["tr(ϱ)", (psi,args...) -> real(normmps(psi))],
-    ["bathOcc", (psi,args...) -> real(measure1siteoperator(psi, numb(dhilbert), (N+1,N+Nm)))],
+    ["bathOcc", (psi,args...) -> real(measure1siteoperator(psi, numb(dhilbert), (N+1,N+2*Nm)))],
     ["coherence12", (psi, args...) -> measure2siteoperator(psi, crea(2), anih(2), 1,2) ]
     #["coherence13", (psi, args...) -> abs(measure2siteoperator(psi, crea(2), anih(2), 1,3)) ],
     #["coherence23", (psi, args...) -> abs(measure2siteoperator(psi, crea(2), anih(2), 2,3)) ]
@@ -131,8 +131,8 @@ cobs = [
 
 
 # Initial State of the system
-InitState(Dmax,d) = superpositionmps(Dmax,d)
 #InitState(Dmax,d) = A(Dmax,d)
+InitState(Dmax,d) = superpositionmps(Dmax, d)
 
 # Run the time evolution (dat is a dictionnary containing the time-series of the observables)
 B, convdat, dat, convplts, deltas =
