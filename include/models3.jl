@@ -94,10 +94,10 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
     function γ(x::Int, n::Int, issoft::Bool; beta="inf", temp=[1.])
         if beta=="inf"
             if issoft==true
-                polynomial0(t) = sf_laguerre_n(n,s,t)*exp(-im*t*x*R*ωc/c_phonon)*t^s*exp(-s)
-                return sqrt(2*α*gamma(s + 1))*ωc*quadgk(polynomial0, 0, 1)[1]
+                polynomial0(t) = sf_laguerre_n(n,s,t)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s*exp(-s)
+                return sqrt(2*α*gamma(n+s + 1)/gamma(n+1))*ωc*quadgk(polynomial0, 0, 1)[1]
             else
-                polynomial(t) = 2*jacobi(2*t-1,n-1, 0, s)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s
+                polynomial(t) = jacobi(2*t-1,n-1, 0, s)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s
 		return sqrt(2*α*(2*(n-1) + s + 1))*ωc*quadgk(polynomial, 0, 1)[1]
 
                 # """ 2 discrete modes case """
@@ -111,14 +111,14 @@ function thibautmpo(N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=
                 #     return (g1*g2)*(exp(-im*w1*(x-1)) - exp(-im*w2*(x-1)))/sqrt(g1^2+g2^2)
                 # end
             end
-        elseif beta!="inf"
-            polynomial(t) = polybeta(t,n-1,a_chain,b_chain,[t])
-            integrand(t) = polynomial(t)*exp(im*t*(x-1)*R*ωc/c_phonon)*SDTOhmic(t)
-            N2(t) = polynomial(t)^2*SDTOhmic(t)
-            if length(Norm)<n
-                push!(Norm,sqrt(quadgk(N2,-1,1)[1]))
-            end
-            return (ωc/Norm[n])*quadgk(integrand, -1, 1)[1]
+        #elseif beta!="inf"
+        #    polynomial(t) = polybeta(t,n-1,a_chain,b_chain,[t])
+        #    integrand(t) = polynomial(t)*exp(im*t*(x-1)*R*ωc/c_phonon)*SDTOhmic(t)
+        #    N2(t) = polynomial(t)^2*SDTOhmic(t)
+        #    if length(Norm)<n
+        #        push!(Norm,sqrt(quadgk(N2,-1,1)[1]))
+        #    end
+        #    return (ωc/Norm[n])*quadgk(integrand, -1, 1)[1]
             
         end
     end
@@ -468,6 +468,26 @@ function spinbosonmpo(ω0, d, Nm, chainparams)
     return Any[M, chain...]
 end
 
+function spinbosonmpotwochains(ω0, d, Nm, chainparams)
+    print("Spinboson MPO called\n")
+    u = unitmat(2)
+
+    up(H, h, hd) = permutedims(cat(H, h, hd, u; dims=3), [3,1,2])
+
+    c0 = chainparams[3]
+
+    Hs = ω0*sx
+
+    M=zeros(1,4,2,2)
+    M[1, :, :, :] = up(Hs, c0*sz, c0*sz)
+
+    chain = bathtwochains(Nm, d, chainparams)
+    chain = chain.sites
+    chain[end] = reshape(chain[end],4,1,d,d)
+    print("Exit Spinboson MPO\n")
+    return Any[M, chain...]
+end
+
 function bathchain(N::Int, d::Int, chainparams)
     b = anih(d)
     bd = crea(d)
@@ -480,6 +500,43 @@ function bathchain(N::Int, d::Int, chainparams)
     down(H, h, hd) = permutedims(cat(u, hd, h, H; dims=3), [3,1,2])
 
     H=Vector{AbstractArray}()
+    for i=1:N-1
+        M=zeros(4, 4, d, d)
+        M[4, :, :, :] = up(e[i]*n, t[i]*b, t[i]*bd)
+        M[:, 1, :, :] = down(e[i]*n, b, bd)
+        push!(H, M)
+    end
+    M=zeros(4, d, d)
+    M[:, :, :] = down(e[N]*n, b, bd)
+    push!(H, M)
+    TreeNetwork(H)
+end
+
+function bathtwochains(N::Int, d::Int, chainparams)
+    b = anih(d)
+    bd = crea(d)
+    n = numb(d)
+    u = unitmat(d)
+    e = chainparams[1]
+    t = chainparams[2]
+
+    up(H, h, hd) = permutedims(cat(H, h, hd, u; dims=3), [3,1,2])
+    down(H, h, hd) = permutedims(cat(u, hd, h, H; dims=3), [3,1,2])
+
+    H=Vector{AbstractArray}()
+	
+    # First Chain
+    for i=1:N-1
+        M=zeros(4, 4, d, d)
+        M[4, :, :, :] = up(e[i]*n, t[i]*b, t[i]*bd)
+        M[:, 1, :, :] = down(e[i]*n, b, bd)
+        push!(H, M)
+    end
+    M=zeros(4, 4, d, d)
+    M[:, :, :] = down(e[N]*n, b, bd)
+    push!(H, M)
+
+    # Second chain
     for i=1:N-1
         M=zeros(4, 4, d, d)
         M[4, :, :, :] = up(e[i]*n, t[i]*b, t[i]*bd)
