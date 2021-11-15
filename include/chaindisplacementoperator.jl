@@ -8,19 +8,19 @@ The argument t is the dimensionless variable ω/ωc.
     if t==0
         return 2*α/beta
     elseif t>-1 && t<1
-        return α*t*ωc*(1+coth(beta*t*ωc*0.5))
+        return α*t*ωc/c_phonon*(1+coth(beta*t*ωc*0.5))
     elseif abs(t)==1
-        return α*t*ωc*(1+coth(beta*t*ωc*0.5))
+        return α*t*ωc/c_phonon*(1+coth(beta*t*ωc*0.5))
     else
         return 0
     end
 end
 
-function spectraldensity(k)
+function spectraldensity(t)
     if beta=="inf"
-        return abs(k)<=1 ? 2*α*k*ωc/c_phonon : 0
+        return abs(t)<=1 ? 2*α*t*ωc/c_phonon : 0
     else
-        return SDTOhmic(k)
+        return SDTOhmic(t)
     end
 end
 
@@ -40,11 +40,16 @@ function polynomial(k,beta,n)
     end
 end
 
-function displacedchainmps(A::Vector{Any}, γ::Array{Complex{Float64},1}, N::Int, Nm::Int, dhilbert::Int; J=0.2, chainparams, s=1, α=0.02, ωc=1, R=1, c_phonon=1, beta ="inf", issoft=false)
+function displacedchainmps(A::Vector{Any}, N::Int, Nm::Int; γ::Array{Complex{Float64},1}=nothing, chainparams, s=1, α=0.02, ωc=1, R=1, c_phonon=1, beta ="inf", issoft=false)
 """
 For a displacement gamma of the bath modes, compute the corresponding displaced operator on the 2*Nm-long chain and apply it to a given mps A.
 """
-    if beta != "inf" # For finite temperature
+    # if no displacement vector was given, we construct one with gamma_k = -g_k/omega_k * exp(-i*k*R)
+    if γ==nothing
+        γ = [-sqrt(spectraldensity(k))/(abs(k)*c_phonon)*exp(-im*k*R*ωc/c_phonon) for k=0.01:0.01:1]
+    end
+
+    if beta != "inf" # For finite temperature we use the chain params for the polynomials of the unitary transformation
         achain = chainparams[1]./ωc
     	bchain = (chainparams[2].^2)./ωc
     end
@@ -57,11 +62,11 @@ For a displacement gamma of the bath modes, compute the corresponding displaced 
         d1, d2, dsystem = size(A[i]) # left bond dim, right bond dim and system physical dim
         χ = d1*d2 # bond dimension of the MPO
         identity_system = zeros(ComplexF64,χ,χ,dsystem,dsystem)
-        for j=1:d1
-            for l=1:d2
-                identity_system[j,l,:,:] = unitmat(dsystem)
-            end
-        end
+        #for j=1:d1
+            #for l=1:d2
+                identity_system[1,1,:,:] = unitmat(dsystem)
+            #end
+        #end
         push!(D, identity_system)
 
         Ap = reshape(A[i], χ*dsystem) #reshape the MPS tensor as a vector
@@ -89,14 +94,14 @@ For a displacement gamma of the bath modes, compute the corresponding displaced 
         L = length(γ)
 
         for k=1:L
-            Unk = sqrt(spectraldensity(k/L))*polynomial(k/L,beta,n) # Matrix element of the unitary transformation from the chain to the bath
+            Unk = sqrt(spectraldensity(k/L))*polynomial(k/L,beta,n) # Matrix element of the unitary transformation from the bath to the chain
             ι += γ[k]*Unk
         end
-        for j=1:χ
-            for l=1:χ
-                W[j,l,:,:] = ι*bd - conj(ι)*b
-            end
-        end
+        #for j=1:χ
+            #for l=1:χ
+                W[1,1,:,:] = ι*bd - conj(ι)*b
+            #end
+        #end
         push!(D, W)
         Ap = reshape(A[N+n], χ*dhilbert)
         M = reshape(W, χ*dhilbert, χ*dhilbert)
