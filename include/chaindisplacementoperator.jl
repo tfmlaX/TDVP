@@ -1,6 +1,6 @@
 include("fundamentals.jl")
 
-function SDTOhmic(t)
+function SDTOhmic(t, c_phonon)
 """
 Effective Ohmic Spectral density at inverse temperature beta.
 The argument t is the dimensionless variable ω/ωc.
@@ -16,11 +16,11 @@ The argument t is the dimensionless variable ω/ωc.
     end
 end
 
-function spectraldensity(t)
+function spectraldensity(t, c_phonon)
     if beta=="inf"
         return abs(t)<=1 ? 2*α*t*ωc/c_phonon : 0
     else
-        return SDTOhmic(t)
+        return SDTOhmic(t, c_phonon)
     end
 end
 
@@ -46,7 +46,7 @@ For a displacement gamma of the bath modes, compute the corresponding displaced 
 """
     # if no displacement vector was given, we construct one with gamma_k = -g_k/omega_k * exp(-i*k*R)
     if γ==nothing
-        γ = [-sqrt(spectraldensity(k))/(abs(k)*c_phonon)*exp(-im*k*R*ωc/c_phonon) for k=0.01:0.01:1]
+        γ = [-sqrt(spectraldensity(k, c_phonon))/(abs(k)*c_phonon)*exp(-im*k*R*ωc/c_phonon) for k=0.01:0.01:1]
     end
 
     if beta != "inf" # For finite temperature we use the chain params for the polynomials of the unitary transformation
@@ -76,7 +76,7 @@ For a displacement gamma of the bath modes, compute the corresponding displaced 
         L = length(γ)
         δk = 0.01 # spacing of the k-modes
         for k=1:L
-            Unk = sqrt(spectraldensity(k/L))*polynomial(k/L,beta,n) # Matrix element of the unitary transformation from the bath to the chain
+            Unk = sqrt(spectraldensity(k/L, c_phonon))*polynomial(k/L,beta,n) # Matrix element of the unitary transformation from the bath to the chain
             ι += γ[k]*Unk*δk
         end
         push!(displ, abs(ι)^2)
