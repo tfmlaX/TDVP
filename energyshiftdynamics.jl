@@ -9,30 +9,41 @@ Dissipation by the environment is not accounted for, but local reorganisation en
 The outputs of the code are the dynamics of the populations of the two sites and the dynamics of their energies.
 """
 ## Physical Parameters
-α = 0.3 # Kondo parameter
+α = 0.1 # Kondo parameter
 J = 0.1 # coherent coupling
 ωc = 1 # Bath cut-off frequency
 c = 1 # Speed of sound
 
 λ = 4*α*ωc # Reorganisation energy
 
-E1 = λ # Bare Energy of the first site (note that for each site a reorganisation energy -λ*|ϕ|^2 is also taken into account in the Hamiltonian)
-E2 = -λ
+E1 = 0 # Bare Energy of the first site (note that for each site a reorganisation energy -λ*|ϕ|^2 is also taken into account in the Hamiltonian)
+E2 = 0
 
-R = 30 # Sites separation
+R = 40 # Sites separation
 
-κ = 4 # Multiplicative coefficient for the energy perturbation (the object creating the perturbation is κ-times more coupled to the environment)
-invwidth = ωc/4 # 1/width of the Lorentzian energy shift
-energyshift(t,r) = κ*0.5*λ/(1 + (invwidth*(r/c - t))^2) # transient energy perturbation (Ohmic spectral density with exponential cut-off)
+κ = 1 # Multiplicative coefficient for the energy perturbation (the object creating the perturbation is κ-times more coupled to the environment)
+invwidth = ωc # 1/width of the Lorentzian energy shift
+
+issoft = false # spectral density cutoff
+
+function energyshift(t,r; issoft=true)
+    # transient energy perturbation (Ohmic spectral density)
+    if issoft==true
+        return κ*0.5*λ/(1 + (invwidth*(r/c - t))^2)
+    else
+        return κ*λ*sinc((r/c - t)/(π*invwidth))
+    end
+end
 Hinst = Any[]
 tinst = Any[]
-function hamiltonian(t::Float64, ϕ)
+function hamiltonian(t::Float64, ϕ; issoft=true)
     # Matrix defining the system of ODEs
     H = zeros(ComplexF64,2, 2)
+    λ1 = issoft==true ? λ*abs(ϕ[1])^2 : 2*λ*abs(ϕ[1])^2
+    λ2 = issoft==true ? λ*abs(ϕ[2])^2 : 2*λ*abs(ϕ[2])^2
+    H[1,1] = E1 + energyshift(t,R,issoft=issoft) - λ1
 
-    H[1,1] = E1 + energyshift(t,R) - λ*abs(ϕ[1])^2
-
-    H[2,2] = E2 + energyshift(t,2*R) - λ*abs(ϕ[2])^2
+    H[2,2] = E2 + energyshift(t,2*R,issoft=issoft) - λ2
 
     H[1,2] = H[2,1] = J
 
@@ -45,12 +56,12 @@ end
 ϕ0 = [1. + 0*im, 0. + 0*im]
 
 ## Integration parameters
-tspan = (0.0,100.0)
+tspan = (0.0,200.0)
 dt = 0.01 # timestep
 
 ## Integration using ODEProblem ##
 function derivative!(dψ, ψ, p, t)
-    return mul!(dψ, hamiltonian(t, ψ), ψ)
+    return mul!(dψ, hamiltonian(t, ψ,issoft=issoft), ψ)
 end
 problem = ODEProblem(derivative!, ϕ0, tspan)
 alg = RK4()
@@ -82,24 +93,24 @@ siteplot = plot(times, [P[n,:] for n=1:2], label=["Site 1" "Site 2"], title="R/c
 xlabel!("ωc t")
 ylabel!("P(t)")
 display(siteplot)
-savefig(string(savedir,"/population_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth).png"))
+savefig(string(savedir,"/population_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).png"))
 
-energyplot = plot(times, [t-> n==1 ? energyshift(t,n*R) + E1 - λ*P[n,indexin(t,times)[1]] : energyshift(t,n*R) + E2 - λ*P[n,indexin(t,times)[1]] for n=1:2], label=["Site 1" "Site 2"])
+energyplot = plot(times, [t-> n==1 ? energyshift(t,n*R,issoft=issoft) + E1 - (issoft==true ? λ : 2*λ)*P[n,indexin(t,times)[1]] : energyshift(t,n*R,issoft=issoft) + E2 - (issoft==true ? λ : 2*λ)*P[n,indexin(t,times)[1]] for n=1:2], label=["Site 1" "Site 2"])
 xlabel!("ωc t")
 ylabel!("Energy")
 display(energyplot)
-savefig(string(savedir,"/energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth).svg"))
+savefig(string(savedir,"/energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).svg"))
 
 energynumplot = plot(tinst,[H1, H2], label=["Site 1" "Site 2"])
 xlabel!("ωc t")
 ylabel!("Energy")
 display(energynumplot)
-savefig(string(savedir,"/num_energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth).png"))
+savefig(string(savedir,"/num_energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).png"))
 
 eigenplot = plot(tinst,[ϵ1,ϵ2], label=:none)
-hline!([[E1-λ],[E2]], label=[L"E_1^0" L"E_2^0"], bg_legend = :transparent)
+hline!([[E1-(issoft==true ? λ : 2*λ)],[E2]], label=[L"E_1^0" L"E_2^0"], bg_legend = :transparent)
 vline!([[R/c],[2*R/c]], linestyle=:dot, label=:none)
 xlabel!("ωc t")
 ylabel!("Eigen-Energy")
 display(eigenplot)
-savefig(string(savedir,"/eigen_energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth).png"))
+savefig(string(savedir,"/eigen_energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).png"))
