@@ -2,7 +2,7 @@ using JLD, Random, Dates, Plots
 include("config.jl")
 include("chainTDVP.jl")
 include("treeTDVP.jl")
-include("models3.jl")
+include("models.jl")
 
 function runtdvp!(dt, T, B, H, dir::String; params=[], observables=[], saveevery=nothing, verbose=false, save=false, timed=false, unid=nothing, log=true, lightcone=false)
 
