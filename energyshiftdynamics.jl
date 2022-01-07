@@ -9,35 +9,52 @@ Dissipation by the environment is not accounted for, but local reorganisation en
 The outputs of the code are the dynamics of the populations of the two sites and the dynamics of their energies.
 """
 ## Physical Parameters
-α = 0.3 # Kondo parameter
-J = 0.1 # coherent coupling
+α = 0.2 # Kondo parameter
+J = 0.15 # coherent coupling
 ωc = 1 # Bath cut-off frequency
 c = 1 # Speed of sound
 
 λ = 4*α*ωc # Reorganisation energy
 
-E1 = λ # Bare Energy of the first site (note that for each site a reorganisation energy -λ*|ϕ|^2 is also taken into account in the Hamiltonian)
-E2 = -λ
+E1 = 0 # Bare Energy of the first site (note that for each site a reorganisation energy -λ*|ϕ|^2 is also taken into account in the Hamiltonian)
+E2 = 0.5
 
-R = 30 # Sites separation
+R = 4
+R1 = R # Sites separation
+R2 = 2*R
 
-κ = 4 # Multiplicative coefficient for the energy perturbation (the object creating the perturbation is κ-times more coupled to the environment)
-invwidth = ωc/4 # 1/width of the Lorentzian energy shift
-energyshift(t,r) = κ*0.5*λ/(1 + (invwidth*(r/c - t))^2) # transient energy perturbation (Ohmic spectral density with exponential cut-off)
+κ = 3 # Multiplicative coefficient for the energy perturbation (the object creating the perturbation is κ-times more coupled to the environment)
+invwidth = ωc # 1/width of the Lorentzian energy shift
+
+issoft = false # spectral density cutoff
+
+function energyshift(t,r; issoft=true)
+    # transient energy perturbation (Ohmic spectral density)
+    if issoft==true
+        return κ*0.5*λ/(1 + (invwidth*(r/c - t))^2)
+    else
+        return κ*λ*sinc((r/c - t)*invwidth/π)
+    end
+end
 Hinst = Any[]
 tinst = Any[]
-function hamiltonian(t::Float64, ϕ)
+ϕinst = Any[]
+function hamiltonian(t::Float64, ϕ; issoft=true)
     # Matrix defining the system of ODEs
     H = zeros(ComplexF64,2, 2)
+    λ1 = issoft==true ? λ*abs(ϕ[1])^2 : 2*λ*abs(ϕ[1])^2
+    λ2 = issoft==true ? λ*abs(ϕ[2])^2 : 2*λ*abs(ϕ[2])^2
+    H[1,1] = E1 + energyshift(t,R1,issoft=issoft) - λ1
 
-    H[1,1] = E1 + energyshift(t,R) - λ*abs(ϕ[1])^2
+    H[2,2] = E2 - energyshift(t,R2,issoft=issoft) - λ2
 
-    H[2,2] = E2 + energyshift(t,2*R) - λ*abs(ϕ[2])^2
+    H[1,2] = J
 
-    H[1,2] = H[2,1] = J
+    H[2,1] = conj(H[1,2])
 
     push!(Hinst,H)
     push!(tinst,t)
+    push!(ϕinst,ϕ)
     return -im.*H
 end
 
@@ -45,12 +62,12 @@ end
 ϕ0 = [1. + 0*im, 0. + 0*im]
 
 ## Integration parameters
-tspan = (0.0,100.0)
+tspan = (0.0,50.0)
 dt = 0.01 # timestep
 
 ## Integration using ODEProblem ##
 function derivative!(dψ, ψ, p, t)
-    return mul!(dψ, hamiltonian(t, ψ), ψ)
+    return mul!(dψ, hamiltonian(t, ψ,issoft=issoft), ψ)
 end
 problem = ODEProblem(derivative!, ϕ0, tspan)
 alg = RK4()
@@ -64,42 +81,71 @@ lhinst = length(Hinst)
 ϵ2 = zeros(lhinst)
 H1 = zeros(lhinst) # Eigen-values of the Hamiltonian
 H2 = zeros(lhinst)
+F1 = zeros(length(times))
+F2 = zeros(length(times))
+F3 = zeros(length(times))
+F4 = zeros(length(times))
 for i=1:length(times)
     ϕ[:,i] = sol[i]
     normϕ = sqrt(dot(ϕ[:,i],ϕ[:,i]))
     ϕ[:,i] = ϕ[:,i]./normϕ
     P[:,i] = abs.(ϕ[:,i]).^2
     Normalisation[i] = sum(P[:,i])
+
+    F = eigen(+im.*hamiltonian(times[i],ϕ[:,i],issoft=issoft)).vectors
+    F1[i] = abs(dot(F[:,1],ϕ[:,i]))^2
+    F2[i] = abs(dot(F[:,2],ϕ[:,i]))^2
+    sym = (F[:,1] + F[:,2])/sqrt(2)
+    antisym = (F[:,1] - F[:,2])/sqrt(2)
+    F3[i] = abs(dot(sym,ϕ[:,i]))^2
+    F4[i] = abs(dot(antisym,ϕ[:,i]))^2
 end
-for i=1:length(Hinst)
+for i=1:lhinst
     ϵ1[i], ϵ2[i] = real.(eigen(Hinst[i]).values)
-    H1[i] = Hinst[i][1,1]
-    H2[i] = Hinst[i][2,2]
+    #F1[i] = abs(dot(F.vectors[:,1],ϕinst[i]))^2
+    #F2[i] = abs(dot(F.vectors[:,2],ϕinst[i]))^2
+    H1[i] = real(Hinst[i][1,1])
+    H2[i] = real(Hinst[i][2,2])
 end
 ## Plotting the results
 savedir = "Plots"
 siteplot = plot(times, [P[n,:] for n=1:2], label=["Site 1" "Site 2"], title="R/c = $(R/c)", bg_legend = :transparent)
+vline!([[R1/c],[R2/c]], linestyle=:dot, label=:none)
 xlabel!("ωc t")
 ylabel!("P(t)")
 display(siteplot)
-savefig(string(savedir,"/population_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth).png"))
+savefig(string(savedir,"/population_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).png"))
 
-energyplot = plot(times, [t-> n==1 ? energyshift(t,n*R) + E1 - λ*P[n,indexin(t,times)[1]] : energyshift(t,n*R) + E2 - λ*P[n,indexin(t,times)[1]] for n=1:2], label=["Site 1" "Site 2"])
+energyplot = plot(times, [t-> n==1 ? energyshift(t,R1,issoft=issoft) + E1 - (issoft==true ? λ : 2*λ)*P[n,indexin(t,times)[1]] : energyshift(t,R2,issoft=issoft) + E2 - (issoft==true ? λ : 2*λ)*P[n,indexin(t,times)[1]] for n=1:2], label=["Site 1" "Site 2"])
 xlabel!("ωc t")
 ylabel!("Energy")
 display(energyplot)
-savefig(string(savedir,"/energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth).svg"))
+savefig(string(savedir,"/energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).svg"))
 
-energynumplot = plot(tinst,[H1, H2], label=["Site 1" "Site 2"])
+energynumplot = plot(tinst[1:lhinst],[H1, H2], label=["Site 1" "Site 2"])
 xlabel!("ωc t")
 ylabel!("Energy")
 display(energynumplot)
-savefig(string(savedir,"/num_energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth).png"))
+savefig(string(savedir,"/num_energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).png"))
 
-eigenplot = plot(tinst,[ϵ1,ϵ2], label=:none)
-hline!([[E1-λ],[E2]], label=[L"E_1^0" L"E_2^0"], bg_legend = :transparent)
-vline!([[R/c],[2*R/c]], linestyle=:dot, label=:none)
+eigenplot = plot(tinst[1:lhinst],[ϵ1,ϵ2], label=:none)
+hline!([[E1-(issoft==true ? λ : 2*λ)],[E2]], label=[L"E_1^0" L"E_2^0"], bg_legend = :transparent)
+vline!([[R1/c],[R2/c]], linestyle=:dot, label=:none)
 xlabel!("ωc t")
 ylabel!("Eigen-Energy")
 display(eigenplot)
-savefig(string(savedir,"/eigen_energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth).png"))
+savefig(string(savedir,"/eigen_energy_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).png"))
+
+fidelplot = plot(times,[F1,F2], label=["Lower eigenstate" "Upper eigenstate"],bg_legend = :transparent)
+vline!([[R1/c-2/invwidth],[R1/c],[R1/c+2/invwidth],[R2/c-2/invwidth],[R2/c],[R2/c+2/invwidth]], linestyle=:dot, label=:none)
+xlabel!("ωc t")
+ylabel!("Fidelity")
+display(fidelplot)
+savefig(string(savedir,"/fidelity_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).png"))
+
+# fidelplot2 = plot(times,[F3,F4], label=["Symm." "Antisymm."],bg_legend = :transparent)
+# vline!([[R/c-2/invwidth],[R/c],[R/c+2/invwidth],[2*R/c-2/invwidth],[2*R/c],[2*R/c+2/invwidth]], linestyle=:dot, label=:none)
+# xlabel!("ωc t")
+# ylabel!("Fidelity")
+# display(fidelplot2)
+# savefig(string(savedir,"/fidelity2_R=$(R)_c=$(c)_alpha=$(α)_kappa=$(κ)_invwidth=$(invwidth)_issoft=$(issoft).png"))
