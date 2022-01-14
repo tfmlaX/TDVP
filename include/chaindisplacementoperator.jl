@@ -45,7 +45,7 @@ end
 
 function displacedchainmps(A::Vector{Any}, N::Int, Nm::Int; γ=nothing, chainparams=[fill(1.0,Nm),fill(1.0,Nm-1), 1.0], s=1, α=0.02, ωc=1, R=1, c_phonon=1, beta ="inf", issoft=false)
 """
-For a displacement gamma of the bath modes, compute the corresponding displacement operator on the 2*Nm-long chain and apply it to a given mps A.
+For a displacement gamma of the bath modes, compute the corresponding displaced operator on the 2*Nm-long chain and apply it to a given mps A.
 """
     # if no displacement vector was given, we construct one with gamma_k = -g_k/omega_k * exp(-i*k*R)
     δk = 0.01 # spacing of the k-modes
@@ -104,7 +104,7 @@ end
 
 function alternativedisplacedchainmps(A::Vector{Any}, N::Int, Nm::Int; γ=nothing, chainparams=[fill(1.0,Nm),fill(1.0,Nm-1), 1.0], s=1, α=0.02, ωc=1, R=1, c_phonon=1, beta ="inf", issoft=false)
 """
-For a displacement gamma of the bath modes, compute the corresponding displacement operator on the 2*Nm-long chain and apply it to a given mps A.
+For a displacement gamma of the bath modes, compute the corresponding displaced operator on the 2*Nm-long chain and apply it to a given mps A.
 """
     # if no displacement vector was given, we construct one with gamma_k = -g_k/omega_k * exp(-i*k*R)
     δk = 0.01 # spacing of the k-modes
@@ -151,18 +151,18 @@ end
 
 function directdisplacedchainmps(A::Vector{Any}, N::Int, Nm::Int; γ=nothing, chainparams=[fill(1.0,Nm),fill(1.0,Nm-1), 1.0], s=1, α=0.02, ωc=1, R=1, c_phonon=1, beta ="inf", issoft=false)
 """
-Compute the displacement operator for the 2*Nm-long chain from the coefficients of the chain Hamiltonian and apply it to a given mps A.
+For a displacement gamma of the bath modes, compute the corresponding displaced operator on the 2*Nm-long chain and apply it to a given mps A.
 """
     coupling_stored = zeros(ComplexF64,N,Nm) # just need NxNm because the two chains have the same coupling coeff up to complex conjugation
     fnamecc = "chaincouplings_ohmic_R$(R)_a$(α)_wc$(ωc)_xc$(ωc/c)_beta$(beta).csv"
     lcouplings = Nm # number of stored coeff.
     chaincouplings = readdlm(fnamecc,',',ComplexF64,'\n')
 
-    v = chaincouplings[2,:] # coupling coeff of the chain mode to site 2
+    v = chaincouplings[2,1:Nm]
 
-    M = Tridiagonal(chainparams[2], chainparams[1], chainparams[2]) # chain Hamiltonian
+    M = Tridiagonal(chainparams[2], chainparams[1], chainparams[2])
 
-    ι = M\v # complex discplacements
+    ι = M\v
     ι = vcat(-1*conj(ι), -1*ι)
 
     B = Any[] # displaced chain MPS
