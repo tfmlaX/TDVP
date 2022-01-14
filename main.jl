@@ -60,20 +60,28 @@ localisedmps(Dmax,d) = productstatemps(physdims(H(Dmax,d)), Dmax, statelist=stat
 """
 Observables:
 """
-
-function chaincoupling(x::Int, n::Int)
-        polynomial(t) = jacobi(2*t-1,n-1, 0, s)*exp(-im*t*(x-1)*R*ωc/c)*t^s
-        return sqrt(2*α*(2*(n-1) + s + 1))*ωc*quadgk(polynomial, 0, 1)[1]
+coupling_stored = zeros(ComplexF64,N,Nm) # just need NxNm because the two chains have the same coupling coeff up to complex conjugation
+fnamecc = "chaincouplings_ohmic_R$(R)_a$(α)_wc$(ωc)_xc$(ωc/c)_beta$(beta).csv"
+chaincouplings = []
+try
+    global chaincouplings = readdlm(fnamecc,',',ComplexF64,'\n')
+catch error_storage
+    if isa(error_storage, ArgumentError)
+        _ = H(Chimax,dhilbert)
+        global chaincouplings = readdlm(fnamecc,',',ComplexF64,'\n')
+    end
 end
 
+lcouplings = Nm # number of stored coeff.
+
 function wdisp1(d,n)
-        cpl = chaincoupling(2,n)
-        return cpl.*anih(d) + conj(cpl).*crea(d)
+        cpl = chaincouplings[2,n]
+        return cpl*anih(d) + conj(cpl)*crea(d)
 end
 
 function wdisp2(d,n)
-        cpl = chaincoupling(2,n)
-        return cpl.*crea(d) + conj(cpl).*anih(d)
+        cpl = chaincouplings[2,n]
+        return cpl*crea(d) + conj(cpl)*anih(d)
 end
 
 function energyshift(psi, dhilbert)
@@ -82,8 +90,7 @@ function energyshift(psi, dhilbert)
         S += measure2siteoperator(psi, numb(2), wdisp1(dhilbert,n), 2,N+n)
         S += measure2siteoperator(psi, numb(2), wdisp2(dhilbert,n), 2,N+Nm+n)
     end
-
-    return S
+    return real(S)
 end
 
 obs = [
