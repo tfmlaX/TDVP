@@ -97,7 +97,7 @@ function correlatedenvironmentmpo(N::Int, Nm::Int, dhilbert::Int; E=[], J=0.2, c
                 polynomial0(t) = sf_laguerre_n(n,s,t)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s*exp(-s)
                 return sqrt(2*α*gamma(n+s + 1)/gamma(n+1))*ωc*quadgk(polynomial0, 0, 1)[1]
             else
-                polynomial(t) = x==4 ? jacobi(2*t-1,n-1, 0, s)*exp(-im*t*10*R*ωc/c_phonon)*t^s : jacobi(2*t-1,n-1, 0, s)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s
+                polynomial(t) = jacobi(2*t-1,n-1, 0, s)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s
 		        return sqrt(2*α*(2*(n-1) + s + 1))*ωc*quadgk(polynomial, 0, 1)[1]
             end
         #elseif beta!="inf"
