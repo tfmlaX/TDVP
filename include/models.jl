@@ -421,7 +421,7 @@ function correlatedenvironmentmpo(N::Int, Nm::Int, dhilbert::Int; E=[], J=0.2, c
 
     W1 = W[1]
 
-    if arestored==0 || lcouplings<Nm
+    if arestored==0 || Nmstored<Nm || Nstored<N
         writedlm(fnamecc, coupling_stored, ',')
     end
 
