@@ -97,7 +97,7 @@ function correlatedenvironmentmpo(N::Int, Nm::Int, dhilbert::Int; E=[], J=0.2, c
                 polynomial0(t) = sf_laguerre_n(n,s,t)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s*exp(-s)
                 return sqrt(2*α*gamma(n+s + 1)/gamma(n+1))*ωc*quadgk(polynomial0, 0, 1)[1]
             else
-                polynomial(t) = jacobi(2*t-1,n-1, 0, s)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s
+                polynomial(t) = x==4 ? jacobi(2*t-1,n-1, 0, s)*exp(-im*t*10*R*ωc/c_phonon)*t^s : jacobi(2*t-1,n-1, 0, s)*exp(-im*t*(x-1)*R*ωc/c_phonon)*t^s
 		        return sqrt(2*α*(2*(n-1) + s + 1))*ωc*quadgk(polynomial, 0, 1)[1]
             end
         #elseif beta!="inf"
@@ -217,7 +217,7 @@ function correlatedenvironmentmpo(N::Int, Nm::Int, dhilbert::Int; E=[], J=0.2, c
     coupling_stored = zeros(ComplexF64,N,Nm) # just need NxNm because the two chains have the same coupling coeff up to complex conjugation
     fnamecc = "chaincouplings_ohmic_R$(R)_a$(α)_wc$(ωc)_xc$(ωc/c_phonon)_beta$(beta).csv"
     arestored = 1 # are the coupling coefficient stored
-    lcouplings = Nm # number of stored coeff.
+    Nstored, Nmstored = N, Nm # number of stored coeff.
     couplinglist = []
     try
         couplinglist = readdlm(fnamecc,',',ComplexF64,'\n')
@@ -228,11 +228,11 @@ function correlatedenvironmentmpo(N::Int, Nm::Int, dhilbert::Int; E=[], J=0.2, c
         end
     end
     if couplinglist != []
-        if size(couplinglist)[2]>=Nm
+        Nstored, Nmstored = size(couplinglist)
+        if Nmstored>=Nm && Nstored>=N
             coupling_stored = couplinglist[1:N,1:Nm]
         else
-            coupling_stored[1:N,1:size(couplinglist)[2]] = couplinglist[1:N,1:end]
-            lcouplings = size(couplinglist)[2]
+            coupling_stored[1:min(N,Nstored),1:min(Nm,Nmstored)] = couplinglist[1:min(N,Nstored),1:min(Nm,Nmstored)]
             print("Less coupling coefficient stored than needed. Available ones will be used and missing one will be computed and stored.\n")
         end
     end
@@ -287,7 +287,7 @@ function correlatedenvironmentmpo(N::Int, Nm::Int, dhilbert::Int; E=[], J=0.2, c
             a = 0 #site counter
             while i<D
                 a+=1
-                if arestored==1 && m<=lcouplings
+                if arestored==1 && m<=Nmstored && a<=Nstored
                     couplingcoeff = coupling_stored[a,m]
                 else
                     couplingcoeff = γ(a, m, issoft,beta=beta)
@@ -323,7 +323,7 @@ function correlatedenvironmentmpo(N::Int, Nm::Int, dhilbert::Int; E=[], J=0.2, c
         a = 0 #site counter
         while i<D
             a+=1
-            if arestored==1 && Nm<=lcouplings
+            if arestored==1 && Nm<=Nmstored && a<=Nstored
                 couplingcoeff = coupling_stored[a,Nm]
             else
                 couplingcoeff = γ(a, Nm, issoft,beta=beta)
